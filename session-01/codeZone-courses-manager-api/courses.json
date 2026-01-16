@@ -1,0 +1,14 @@
+[
+    {
+        "title": "Javascript",
+        "price": "5000"
+    },
+    {
+        "title": "Angular",
+        "price": "4000"
+    },
+    {
+        "title": "React Native",
+        "price": "5800"
+    }
+]
