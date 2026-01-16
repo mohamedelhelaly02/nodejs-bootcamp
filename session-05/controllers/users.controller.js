@@ -182,13 +182,43 @@ const verifyPassResetCode = asyncWrapper(async (req, res, next) => {
     user.passwordResetVerifed = true;
 
     await user.save();
-    
+
     return res.status(200).json({ status: httpStatusText.SUCCESS, message: 'Code Verified.' })
 
 })
 
 const resetPassword = asyncWrapper(async (req, res, next) => {
-    // Implementation for reset password
+    const { email, newPassword } = req.body;
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+        return next(appError.create(`There is no user with email '${email}'`, 404, httpStatusText.FAIL));
+    }
+
+    // check if the resetCode verified
+
+    if (!user.passwordResetVerifed) {
+        return next(appError.create(`Code not verified.`, 400, httpStatusText.FAIL))
+    }
+
+    var hashedPassword = crypto
+        .createHash('sha256')
+        .update(newPassword)
+        .digest('hex');
+
+    user.password = hashedPassword;
+    user.passwordChangedAt = Date.now();
+    user.passwordResetCode = undefined;
+    user.passwordResetVerifed = undefined;
+    user.passwordResetExpires = undefined;
+
+    await user.save();
+
+    const token = generateJwtToken(user);
+
+    return res.status(200).json({ status: httpStatusText.SUCCESS, data: { token } });
+
 });
 
 module.exports = {
@@ -198,7 +228,8 @@ module.exports = {
     getProfile,
     updateProfile,
     forgetPassword,
-    verifyPassResetCode
+    verifyPassResetCode,
+    resetPassword
 };
 
 // Other endpoints for users

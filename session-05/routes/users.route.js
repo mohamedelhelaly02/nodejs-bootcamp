@@ -7,11 +7,13 @@ const {
     getProfile,
     updateProfile,
     forgetPassword,
-    verifyPassResetCode
+    verifyPassResetCode,
+    resetPassword
 } = require('../controllers/users.controller.js');
 const { validateMiddleware } = require('../middlewares/validateMiddleware.js');
 const { verifyToken } = require('../middlewares/verifyToken.js');
 const fileUpload = require('express-fileupload');
+const { forgetPasswordLimiter } = require('../middlewares/rateLimiter.js');
 const router = express.Router();
 
 router.route('').get(getAllUsers);
@@ -23,8 +25,9 @@ router.route('/login').post(userLoginValidationSchema(), validateMiddleware, log
 router.route('/me/profile').get(verifyToken, getProfile);
 router.route('/me/profile').put(verifyToken, fileUpload({ createParentPath: true }), updateProfile);
 
-router.route('/forget-password').post(forgetPassword);
+router.route('/forget-password').post(forgetPasswordLimiter, forgetPassword);
 
 router.route('/verify-reset-code').post(verifyPassResetCode);
+router.route('/reset-password').post(resetPassword);
 
 module.exports = { usersRouter: router };
