@@ -281,8 +281,8 @@ const resetPassword = asyncWrapper(async (req, res, next) => {
 });
 
 const confirmEmail = asyncWrapper(async (req, res, next) => {
-    const { email, code } = req.body;
-    const user = await User.findOne({ email, code, codeExpiration: { $gt: Date.now() } });
+    const hashedCode = crypto.createHash('sha256').update(req.body.code).digest('hex');
+    const user = await User.findOne({ email: req.body.email, code: hashedCode, codeExpiration: { $gt: Date.now() } });
 
     if (!user) {
         return next(appError.create(
@@ -305,6 +305,58 @@ const confirmEmail = asyncWrapper(async (req, res, next) => {
 
 });
 
+const resendConfirmEmail = asyncWrapper(async (req, res, next) => {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+        return next(appError.create('User not found', 404, httpStatusText.FAIL));
+    }
+
+    if (user.emailConfirmed) {
+        return next(appError.create('Email already confirmed', 400, httpStatusText.FAIL));
+    }
+
+    const confirmEmailCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedCode = crypto
+        .createHash('sha256')
+        .update(confirmEmailCode)
+        .digest('hex');
+
+    user.code = hashedCode;
+    user.codeExpiration = Date.now() + 10 * 60 * 1000;
+
+    await user.save();
+
+    const message = `
+        Hi ${user.firstName} ${user.lastName},
+
+        You requested a new email confirmation code.
+
+        Your new confirmation code is:
+        ${confirmEmailCode}
+
+        ⚠️ This code is valid for 10 minutes.
+
+        If you did not request this, please ignore this email.
+
+        CodeZone-Courses Team
+        `;
+
+    await sendEmail({
+        email: user.email,
+        subject: 'New Email Confirmation Code',
+        message
+    });
+
+    return res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        message: 'A new confirmation code has been sent to your email.'
+    });
+});
+
+
 module.exports = {
     getAllUsers,
     register,
@@ -314,7 +366,8 @@ module.exports = {
     forgetPassword,
     verifyPassResetCode,
     resetPassword,
-    confirmEmail
+    confirmEmail,
+    resendConfirmEmail
 };
 
 // Other endpoints for users
