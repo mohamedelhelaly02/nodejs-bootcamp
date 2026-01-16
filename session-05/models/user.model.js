@@ -52,7 +52,23 @@ const userSchema = new mongoose.Schema({
     },
     codeExpiration: {
         type: Date
-    }
+    },
+    refreshTokens: [{
+        token: {
+            type: String,
+            required: true
+        },
+        createdAt: {
+            type: Date,
+            default: Date.now
+        },
+        expiresAt: {
+            type: Date,
+            required: true
+        },
+        device: String,
+        ipAddress: String
+    }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);

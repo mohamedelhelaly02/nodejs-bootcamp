@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
-const generateJwtToken = (user) => {
+const generateAccessToken = (user) => {
     const payload = {
         id: user._id,
         email: user.email,
@@ -9,10 +10,10 @@ const generateJwtToken = (user) => {
     };
 
     const options = {
-        expiresIn: process.env.JWT_EXPIRES_IN || '1h',
-        issuer: process.env.JWT_VALID_ISSUER || 'http://localhost:4000',
-        audience: process.env.JWT_VALID_AUDIENCE || 'http://localhost:4000',
-        algorithm: process.env.JWT_ALGORITHM || 'HS256'
+        expiresIn: process.env.JWT_EXPIRES_IN,
+        issuer: process.env.JWT_VALID_ISSUER,
+        audience: process.env.JWT_VALID_AUDIENCE,
+        algorithm: process.env.JWT_ALGORITHM
     };
 
     return jwt.sign(payload, process.env.JWT_SECRET, options);
@@ -26,7 +27,25 @@ const verifyJwtToken = (token) => {
     }
 }
 
+const generateRefreshToken = () => {
+    return crypto.randomBytes(64).toString('hex');
+}
+
+const generateTokens = (user) => {
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken();
+
+    return { accessToken, refreshToken }
+}
+
+const getRefreshTokenExpiry = () => {
+    return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+}
+
 module.exports = {
-    generateJwtToken,
-    verifyJwtToken
+    generateAccessToken,
+    verifyJwtToken,
+    generateRefreshToken,
+    generateTokens,
+    getRefreshTokenExpiry
 };

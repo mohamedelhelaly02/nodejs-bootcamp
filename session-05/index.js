@@ -13,6 +13,7 @@ const { uploadImages } = require('./services/imageUpload.service');
 const asyncWrapper = require('./middlewares/asyncWrapper');
 const path = require('path');
 const { rolesRouter } = require('./routes/roles.route');
+const cookieParser = require('cookie-parser');
 
 mongoose.connect(process.env.MONGO_URI)
     .then(() => {
@@ -31,6 +32,8 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(cors());
 
 app.use(express.json());
+
+app.use(cookieParser());
 
 app.use('/api/v1/courses', coursesRouter);
 

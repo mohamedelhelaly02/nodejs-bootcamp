@@ -3,8 +3,7 @@ const User = require('../models/user.model');
 const httpStatusText = require('../utils/httpStatusText');
 const { paginateResponse } = require('../utils/paginateResponse');
 const bcrypt = require('bcryptjs');
-const { generateJwtToken } = require('../utils/jwt')
-const { getCurrentIP } = require('../utils/ip');
+const { generateAccessToken, generateTokens, getRefreshTokenExpiry } = require('../utils/jwt')
 const crypto = require('crypto');
 const { sendEmail } = require('../utils/sendEmail')
 const appError = require('../utils/appError')
@@ -154,9 +153,37 @@ const login = asyncWrapper(async (req, res, next) => {
         });
     }
 
+    const { accessToken, refreshToken } = generateTokens(user);
+
+    // save refresh token in db
+
+    const refreshTokenData = {
+        token: refreshToken,
+        expiresAt: getRefreshTokenExpiry(),
+        device: req.headers['user-agent'],
+        ipAddress: req.ip
+    }
+
+    user.refreshTokens.push(refreshTokenData);
+    user.lastLoginAt = Date.now();
+
+    await user.save();
+
+
+
     return res.status(200).json({
         status: httpStatusText.SUCCESS,
-        data: { token: generateJwtToken(user) }
+        message: 'Login Success',
+        data: {
+            user: {
+                id: user._id,
+                name: `${user.firstName} ${user.lastName}`,
+                email: user.email,
+                avatar: user.avatar
+            },
+            accessToken,
+            refreshToken
+        }
     });
 
 });
@@ -357,6 +384,39 @@ const resendConfirmEmail = asyncWrapper(async (req, res, next) => {
 });
 
 
+const refreshAccessToken = asyncWrapper(async (req, res, next) => {
+    // Get refresh token
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+        return next(appError.create('refresh token is required.', 400, httpStatusText.FAIL));
+    }
+
+    // Get the user owns that refresh token
+    const user = await User.findOne({ 'refreshTokens.token': refreshToken });
+
+    if (!user) {
+        return next(appError.create('Invalid refresh token', 403, httpStatusText.FAIL));
+    }
+
+    const tokenPayload = user.refreshTokens.find(rt => rt.token === refreshToken);
+
+    if (!tokenPayload || tokenPayload.expiresAt < new Date()) {
+        // refresh token is expired
+        user.refreshTokens = user.refreshTokens.filter(rt => rt.token !== refreshToken);
+
+        await user.save();
+
+        return next(appError.create('Refresh token is expired.', 403, httpStatusText.FAIL));
+
+    }
+
+    const newAccessToken = generateAccessToken(user);
+
+    return res.status(200).json({ status: httpStatusText.SUCCESS, data: { accessToken: newAccessToken } });
+
+});
+
+
 module.exports = {
     getAllUsers,
     register,
@@ -367,7 +427,8 @@ module.exports = {
     verifyPassResetCode,
     resetPassword,
     confirmEmail,
-    resendConfirmEmail
+    resendConfirmEmail,
+    refreshAccessToken
 };
 
 // Other endpoints for users

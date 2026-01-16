@@ -10,7 +10,8 @@ const {
     verifyPassResetCode,
     resetPassword,
     confirmEmail,
-    resendConfirmEmail
+    resendConfirmEmail,
+    refreshAccessToken
 } = require('../controllers/users.controller.js');
 const { validateMiddleware } = require('../middlewares/validateMiddleware.js');
 const { verifyToken } = require('../middlewares/verifyToken.js');
@@ -33,5 +34,6 @@ router.route('/verify-reset-code').post(verifyPassResetCode);
 router.route('/reset-password').post(resetPassword);
 router.route('/confirm-email').post(confirmEmail);
 router.route('/resend-confirm-email').post(resendConfirmEmail);
+router.route('/refresh').post(refreshAccessToken);
 
 module.exports = { usersRouter: router };
