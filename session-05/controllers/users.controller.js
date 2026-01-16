@@ -416,6 +416,24 @@ const refreshAccessToken = asyncWrapper(async (req, res, next) => {
 
 });
 
+const getActiveSessions = async (req, res) => {
+    const userId = req.user.id;
+    const user = await User.findById(userId).select('refreshTokens');
+
+    const activeSessions = user.refreshTokens.filter(rt => rt.expiresAt > new Date());
+
+    res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        data: {
+            sessions: activeSessions.map(session => ({
+                device: session.device,
+                ipAddress: session.ipAddress,
+                createdAt: session.createdAt,
+                expiresAt: session.expiresAt
+            }))
+        }
+    });
+};
 
 module.exports = {
     getAllUsers,
@@ -428,7 +446,8 @@ module.exports = {
     resetPassword,
     confirmEmail,
     resendConfirmEmail,
-    refreshAccessToken
+    refreshAccessToken,
+    getActiveSessions
 };
 
 // Other endpoints for users

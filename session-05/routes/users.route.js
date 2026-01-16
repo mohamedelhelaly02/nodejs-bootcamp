@@ -11,7 +11,8 @@ const {
     resetPassword,
     confirmEmail,
     resendConfirmEmail,
-    refreshAccessToken
+    refreshAccessToken,
+    getActiveSessions
 } = require('../controllers/users.controller.js');
 const { validateMiddleware } = require('../middlewares/validateMiddleware.js');
 const { verifyToken } = require('../middlewares/verifyToken.js');
@@ -35,5 +36,6 @@ router.route('/reset-password').post(resetPassword);
 router.route('/confirm-email').post(confirmEmail);
 router.route('/resend-confirm-email').post(resendConfirmEmail);
 router.route('/refresh').post(refreshAccessToken);
+router.route('/active-sessions').get(verifyToken, getActiveSessions);
 
 module.exports = { usersRouter: router };
