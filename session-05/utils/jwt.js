@@ -5,7 +5,7 @@ const generateJwtToken = (user) => {
         id: user._id,
         email: user.email,
         fullName: `${user.firstName} ${user.lastName}`,
-        role: user.role
+        roles: user.roles.map(r => r.name)
     };
 
     const options = {

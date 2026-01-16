@@ -8,6 +8,8 @@ const { getCurrentIP } = require('../utils/ip');
 const crypto = require('crypto');
 const { sendEmail } = require('../utils/sendEmail')
 const appError = require('../utils/appError')
+const Role = require('../models/role.model')
+const userRoles = require('../utils/userRoles')
 
 // profile
 
@@ -32,7 +34,7 @@ const getAllUsers = asyncWrapper(async (req, res, next) => {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
-        role: user.role,
+        roles: user.roles,
         avatar: user.avatar ? `${req.protocol}://${req.get('host')}/${user.avatar}` : null,
     }))
 
@@ -50,7 +52,7 @@ const getAllUsers = asyncWrapper(async (req, res, next) => {
 
 
 const register = asyncWrapper(async (req, res, next) => {
-    const { firstName, lastName, email, password, role } = req.body;
+    const { firstName, lastName, email, password } = req.body;
 
     const existingUser = await User.findOne({ email });
 
@@ -62,14 +64,66 @@ const register = asyncWrapper(async (req, res, next) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const defaultRole = await Role.findOne({ name: userRoles.USER })
 
-    const newUser = new User({ firstName, lastName, email, password: hashedPassword, role });
+    if (!defaultRole) {
+        return next(appError.create(`Role not existes '${userRoles.USER}'`, 500, httpStatusText.FAIL));
+    }
+
+    const newUser = new User({
+        firstName,
+        lastName,
+        email,
+        password: hashedPassword,
+        emailConfirmed: false,
+        roles: [defaultRole._id]
+    });
+
+
+    const confirmEmailCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedCode = crypto.createHash('sha256')
+        .update(confirmEmailCode)
+        .digest('hex');
+
+    newUser.code = hashedCode;
+    newUser.codeExpiration = Date.now() + 10 * 60 * 1000;
+
 
     await newUser.save();
 
+    // send email
+
+    try {
+        const message = `
+            Hi ${newUser.firstName} ${newUser.lastName},
+
+            Thank you for registering at CodeZone-Courses.
+
+            Please confirm your email address using the code below:
+
+            Your confirmation code: ${confirmEmailCode}
+
+            ⚠️ This code is valid for 10 minutes.
+
+            If you did not register, please ignore this email.
+
+            Thank you,
+            The CodeZone-Courses Team
+            `;
+
+        await sendEmail({
+            email: newUser.email,
+            subject: 'Email Confirmation Code',
+            message: message
+        })
+    } catch (error) {
+        return next(appError.create(error.message, 500, httpStatusText.FAIL));
+    }
+
+
     return res.status(201).json({
         status: httpStatusText.SUCCESS,
-        data: { token: generateJwtToken(newUser, getCurrentIP(req)) }
+        message: 'Confirm email required, check your inbox.'
     });
 
 });
@@ -77,13 +131,18 @@ const register = asyncWrapper(async (req, res, next) => {
 const login = asyncWrapper(async (req, res, next) => {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).populate('roles');
 
     if (!user) {
         return res.status(400).json({
             status: httpStatusText.FAIL,
             message: 'Invalid email or password'
         });
+    }
+
+
+    if (!user.emailConfirmed) {
+        return next(appError.create('Email not confirmed.', 400, httpStatusText.FAIL));
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -221,6 +280,31 @@ const resetPassword = asyncWrapper(async (req, res, next) => {
 
 });
 
+const confirmEmail = asyncWrapper(async (req, res, next) => {
+    const { email, code } = req.body;
+    const user = await User.findOne({ email, code, codeExpiration: { $gt: Date.now() } });
+
+    if (!user) {
+        return next(appError.create(
+            'Incorrect code or expired', 400, httpStatusText.ERROR))
+    }
+
+    if (user.emailConfirmed) {
+        return next(appError.create('Email already confirmed.', 400, httpStatusText.ERROR));
+    }
+
+    user.emailConfirmed = true;
+    user.code = undefined;
+    user.codeExpiration = undefined;
+    await user.save();
+
+    return res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        message: 'Email confirmed successfully'
+    });
+
+});
+
 module.exports = {
     getAllUsers,
     register,
@@ -229,7 +313,8 @@ module.exports = {
     updateProfile,
     forgetPassword,
     verifyPassResetCode,
-    resetPassword
+    resetPassword,
+    confirmEmail
 };
 
 // Other endpoints for users

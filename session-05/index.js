@@ -12,6 +12,7 @@ const fileUpload = require('express-fileupload');
 const { uploadImages } = require('./services/imageUpload.service');
 const asyncWrapper = require('./middlewares/asyncWrapper');
 const path = require('path');
+const { rolesRouter } = require('./routes/roles.route');
 
 mongoose.connect(process.env.MONGO_URI)
     .then(() => {
@@ -34,6 +35,7 @@ app.use(express.json());
 app.use('/api/v1/courses', coursesRouter);
 
 app.use('/api/v1/users', usersRouter);
+app.use('/api/v1/roles', rolesRouter);
 
 app.post('/api/v1/upload', fileUpload(), asyncWrapper(async (req, res) => {
     if (!req.files || Object.keys(req.files).length === 0) {
