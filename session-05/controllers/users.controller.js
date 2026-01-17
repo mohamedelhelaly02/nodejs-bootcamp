@@ -3,7 +3,7 @@ const User = require('../models/user.model');
 const httpStatusText = require('../utils/httpStatusText');
 const { paginateResponse } = require('../utils/paginateResponse');
 const bcrypt = require('bcryptjs');
-const { generateAccessToken, generateTokens, getRefreshTokenExpiry } = require('../utils/jwt')
+const { generateAccessToken, generateTokens, getRefreshTokenExpiry, parseUserAgent } = require('../utils/jwt')
 const crypto = require('crypto');
 const { sendEmail } = require('../utils/sendEmail')
 const appError = require('../utils/appError')
@@ -129,6 +129,8 @@ const register = asyncWrapper(async (req, res, next) => {
 
 const login = asyncWrapper(async (req, res, next) => {
     const { email, password } = req.body;
+    const userAgent = req.headers['user-agent'];
+    const ipAddress = req.ip || req.connection.remoteAddress;
 
     const user = await User.findOne({ email }).populate('roles');
 
@@ -139,14 +141,23 @@ const login = asyncWrapper(async (req, res, next) => {
         });
     }
 
+    // check if account locked
+
+    if (user.isAccountLocked()) {
+        return next(appError.create(`Your account locked until ${user.security?.loginAttempts?.lockedUntil.toDateString()}`, 423, httpStatusText.FAIL))
+    }
+
 
     if (!user.emailConfirmed) {
         return next(appError.create('Email not confirmed.', 400, httpStatusText.FAIL));
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await user.comparePassword(password); // schema method
 
     if (!isPasswordValid) {
+
+        await user.incrementLoginAttempts();
+
         return res.status(400).json({
             status: httpStatusText.FAIL,
             message: 'Invalid email or password'
@@ -155,16 +166,19 @@ const login = asyncWrapper(async (req, res, next) => {
 
     const { accessToken, refreshToken } = generateTokens(user);
 
+    const { device, browser, os } = parseUserAgent(userAgent);
+
     // save refresh token in db
 
-    const refreshTokenData = {
+    await user.addRefreshToken({
         token: refreshToken,
         expiresAt: getRefreshTokenExpiry(),
-        device: req.headers['user-agent'],
-        ipAddress: req.ip
-    }
+        device,
+        browser,
+        os,
+        ipAddress
+    })
 
-    user.refreshTokens.push(refreshTokenData);
     user.lastLoginAt = Date.now();
 
     await user.save();
@@ -177,7 +191,7 @@ const login = asyncWrapper(async (req, res, next) => {
         data: {
             user: {
                 id: user._id,
-                name: `${user.firstName} ${user.lastName}`,
+                name: user.fullName,
                 email: user.email,
                 avatar: user.avatar
             },
