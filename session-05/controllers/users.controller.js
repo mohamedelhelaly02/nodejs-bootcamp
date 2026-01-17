@@ -11,6 +11,7 @@ const Role = require('../models/role.model')
 const userRoles = require('../utils/userRoles')
 const { checkSuspiciousLogin, setup2FAApp } = require('../utils/authHelpers');
 const QRCode = require('qrcode');
+const speakeasy = require('speakeasy');
 
 
 // profile
@@ -130,6 +131,7 @@ const register = asyncWrapper(async (req, res, next) => {
 
 });
 
+
 const login = asyncWrapper(async (req, res, next) => {
     const { email, password } = req.body;
     const userAgent = req.headers['user-agent'];
@@ -137,7 +139,8 @@ const login = asyncWrapper(async (req, res, next) => {
 
     const { device, browser, os } = parseUserAgent(userAgent);
 
-    const user = await User.findOne({ email }).populate('roles');
+    const user = await User.findOne({ email })
+        .populate('roles');
 
     if (!user) {
         return res.status(400).json({
@@ -159,6 +162,7 @@ const login = asyncWrapper(async (req, res, next) => {
         return next(appError.create('Email not confirmed.', 400, httpStatusText.FAIL));
     }
 
+
     const isPasswordValid = await user.comparePassword(password); // schema method
 
     if (!isPasswordValid) {
@@ -172,6 +176,23 @@ const login = asyncWrapper(async (req, res, next) => {
             message: 'Invalid email or password'
         });
     }
+
+    // check if the user enable 2FA
+
+    if (user.has2FAEnabled()) {
+        const availableMethods = [];
+        if (user.twoFactorAuth.app.enabled) availableMethods.push('app');
+        if (user.twoFactorAuth.email.enabled) availableMethods.push('email');
+
+        return res.status(200).json({
+            message: 'Complete 2FA.',
+            requires2FA: true,
+            userId: user._id,
+            availableMethods,
+            preferredMethod: user.twoFactorAuth.preferredMethod
+        });
+    }
+
 
     const { accessToken, refreshToken } = generateTokens(user);
 
@@ -476,6 +497,51 @@ const setup2FaAuthenticatorApp = asyncWrapper(async (req, res, next) => {
 
 })
 
+const verify2FAAuthenticatorSetup = asyncWrapper(async (req, res, next) => {
+    const { otp } = req.body;
+    const user = await User.findById(req.user.id).select('+twoFactorAuth.tempOTP.code');
+
+    const temp = user.twoFactorAuth.tempOTP;
+
+    if (!temp || temp.expiresAt < Date.now()) {
+        return next(appError.create('Setup expired', 400, httpStatusText.FAIL));
+    }
+
+    const isValid = speakeasy.totp.verify({
+        secret: temp.code,
+        encoding: 'base32',
+        token: otp,
+        window: 2
+    });
+
+    console.log(otp, temp.code, isValid);
+
+    if (!isValid) {
+        temp.attempts += 1;
+        await user.save({ validateBeforeSave: false });
+        return next(appError.create('Invalid OTP', 400, httpStatusText.FAIL));
+    }
+
+    user.twoFactorAuth.app = {
+        enabled: true,
+        secret: temp.code,
+        enabledAt: new Date()
+    };
+
+    user.twoFactorAuth.tempOTP = undefined;
+
+    await user.save({ validateBeforeSave: false });
+
+    return res.status(200).json({
+        status: httpStatusText.SUCCESS,
+        message: '2FA enabled successfully'
+    });
+
+
+
+
+});
+
 
 
 module.exports = {
@@ -491,7 +557,8 @@ module.exports = {
     resendConfirmEmail,
     refreshAccessToken,
     getActiveSessions,
-    setup2FaAuthenticatorApp
+    setup2FaAuthenticatorApp,
+    verify2FAAuthenticatorSetup
 };
 
 // Other endpoints for users

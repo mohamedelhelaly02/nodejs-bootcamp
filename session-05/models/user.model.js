@@ -145,7 +145,7 @@ const userSchema = new mongoose.Schema({
             },
             method: {
                 type: String,
-                enum: ['sms', 'email', 'setup']
+                enum: ['email', 'setup']
             },
             purpose: {
                 type: String,
@@ -214,10 +214,11 @@ userSchema.virtual('fullName').get(function () {
     return `${this.firstName} ${this.lastName}`;
 })
 
-userSchema.virtual('has2FAEnabled').get(function () {
-    return this.twoFactorAuth.app.enabled ||
-        this.twoFactorAuth.email.enabled;
-})
+
+userSchema.methods.has2FAEnabled = function () {
+    return this.twoFactorAuth?.app?.enabled ||
+        this.twoFactorAuth?.email?.enabled;
+}
 
 userSchema.virtual('activeTokensCount').get(function () {
     return this.refreshTokens.filter(rt => rt.expiresAt > new Date()).length;
