@@ -6,6 +6,10 @@ const getIpGeolocation = async (ipAddress) => {
             params: {
                 ip: ipAddress,
                 apiKey: process.env.GEO_LOCATION_API_KEY
+            },
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
             }
         })
 
