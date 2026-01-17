@@ -95,7 +95,7 @@ const register = asyncWrapper(async (req, res, next) => {
 
     try {
         const message = `
-            Hi ${newUser.firstName} ${newUser.lastName},
+            Hi ${newUser.fullName},
 
             Thank you for registering at CodeZone-Courses.
 
