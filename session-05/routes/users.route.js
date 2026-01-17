@@ -12,7 +12,8 @@ const {
     confirmEmail,
     resendConfirmEmail,
     refreshAccessToken,
-    getActiveSessions
+    getActiveSessions,
+    setup2FaAuthenticatorApp
 } = require('../controllers/users.controller.js');
 const { validateMiddleware } = require('../middlewares/validateMiddleware.js');
 const { verifyToken } = require('../middlewares/verifyToken.js');
@@ -37,5 +38,6 @@ router.route('/confirm-email').post(confirmEmail);
 router.route('/resend-confirm-email').post(resendConfirmEmail);
 router.route('/refresh').post(refreshAccessToken);
 router.route('/active-sessions').get(verifyToken, getActiveSessions);
+router.route('/setup-2fa-app').get(verifyToken, setup2FaAuthenticatorApp);
 
 module.exports = { usersRouter: router };

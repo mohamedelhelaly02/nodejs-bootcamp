@@ -1,5 +1,6 @@
 const { getIpGeolocation } = require('../services/ipGeolocation.service');
 const { sendEmail } = require('../utils/sendEmail');
+const speakeasy = require('speakeasy');
 
 
 const getCountryFromIP = async (ip) => {
@@ -41,10 +42,14 @@ const sendSecurityAlert = async (user, data) => {
 
 const checkSuspiciousLogin = async (user, currentIP, currentDevice) => {
     const userLastLoginIP = user.security.lastLoginIP;
+    console.log(userLastLoginIP);
+
 
     if (userLastLoginIP && userLastLoginIP !== currentIP) {
         const lastCountry = await getCountryFromIP(userLastLoginIP);
         const currentCountry = await getCountryFromIP(currentIP);
+
+        console.log(lastCountry, currentCountry);
 
         if (lastCountry !== currentCountry) {
             const information = {
@@ -60,5 +65,33 @@ const checkSuspiciousLogin = async (user, currentIP, currentDevice) => {
 
 }
 
+async function setup2FAApp(user) {
+    const secret = speakeasy.generateSecret({
+        name: `CodeZone-Courses App (${user.email})`,
+        length: 32
+    });
 
-module.exports = { getCountryFromIP, checkSuspiciousLogin, sendSecurityAlert }
+    user.twoFactorAuth.tempOTP = {
+        code: secret.base32,
+        expiresAt: Date.now() + 10 * 60 * 1000,
+        attempts: 0,
+        method: 'setup',
+        purpose: 'setup'
+    };
+
+    await user.save({ validateBeforeSave: false });
+
+    return {
+        otpauth_url: secret.otpauth_url
+    };
+
+
+}
+
+
+module.exports = {
+    getCountryFromIP,
+    checkSuspiciousLogin,
+    sendSecurityAlert,
+    setup2FAApp
+}

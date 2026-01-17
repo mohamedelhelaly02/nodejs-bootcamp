@@ -9,7 +9,9 @@ const { sendEmail } = require('../utils/sendEmail')
 const appError = require('../utils/appError')
 const Role = require('../models/role.model')
 const userRoles = require('../utils/userRoles')
-const { checkSuspiciousLogin } = require('../utils/authHelpers');
+const { checkSuspiciousLogin, setup2FAApp } = require('../utils/authHelpers');
+const QRCode = require('qrcode');
+
 
 // profile
 
@@ -458,6 +460,24 @@ const getActiveSessions = async (req, res) => {
     });
 };
 
+const setup2FaAuthenticatorApp = asyncWrapper(async (req, res, next) => {
+    const loggedUser = await User.findOne({ _id: req.user.id });
+    if (!loggedUser) {
+        return next(appError.create('Unauthorization to access this resource', 401, httpStatusText.FAIL));
+    }
+
+    const { otpauth_url } = await setup2FAApp(loggedUser);
+    const qrCodeUrl = await QRCode.toDataURL(otpauth_url);
+
+    return res.status(200).json({
+        message: 'Scan this QRcode using Google Authenticator',
+        qrCode: qrCodeUrl
+    });
+
+})
+
+
+
 module.exports = {
     getAllUsers,
     register,
@@ -470,7 +490,8 @@ module.exports = {
     confirmEmail,
     resendConfirmEmail,
     refreshAccessToken,
-    getActiveSessions
+    getActiveSessions,
+    setup2FaAuthenticatorApp
 };
 
 // Other endpoints for users
