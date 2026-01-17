@@ -132,6 +132,7 @@ const login = asyncWrapper(async (req, res, next) => {
     const { email, password } = req.body;
     const userAgent = req.headers['user-agent'];
     const ipAddress = req.ip || req.connection.remoteAddress;
+
     const { device, browser, os } = parseUserAgent(userAgent);
 
     const user = await User.findOne({ email }).populate('roles');
@@ -203,7 +204,8 @@ const login = asyncWrapper(async (req, res, next) => {
                 avatar: user.avatar
             },
             accessToken,
-            refreshToken
+            refreshToken,
+            ip: ipAddress
         }
     });
 
