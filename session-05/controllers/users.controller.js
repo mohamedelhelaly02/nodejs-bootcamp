@@ -9,6 +9,7 @@ const { sendEmail } = require('../utils/sendEmail')
 const appError = require('../utils/appError')
 const Role = require('../models/role.model')
 const userRoles = require('../utils/userRoles')
+const { checkSuspiciousLogin } = require('../utils/authHelpers');
 
 // profile
 
@@ -131,6 +132,7 @@ const login = asyncWrapper(async (req, res, next) => {
     const { email, password } = req.body;
     const userAgent = req.headers['user-agent'];
     const ipAddress = req.ip || req.connection.remoteAddress;
+    const { device, browser, os } = parseUserAgent(userAgent);
 
     const user = await User.findOne({ email }).populate('roles');
 
@@ -140,6 +142,8 @@ const login = asyncWrapper(async (req, res, next) => {
             message: 'Unknown user'
         });
     }
+
+    await checkSuspiciousLogin(user, ipAddress, `${device} - ${browser}`);
 
     // check if account locked
 
@@ -167,8 +171,6 @@ const login = asyncWrapper(async (req, res, next) => {
     }
 
     const { accessToken, refreshToken } = generateTokens(user);
-
-    const { device, browser, os } = parseUserAgent(userAgent);
 
     // save refresh token in db
 
