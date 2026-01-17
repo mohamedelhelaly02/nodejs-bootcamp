@@ -276,4 +276,37 @@ userSchema.methods.isAccountLocked = function () {
         this.security.loginAttempts.lockedUntil > Date.now();
 }
 
+userSchema.methods.logSuspiciousActivity = async function (type, details = {}) {
+    this.security.suspiciousActivity.push({
+        type,
+        timestamp: Date.now(),
+        ipAddress: details.ipAddress,
+        details
+    });
+
+    if (this.security.suspiciousActivity.length > 50) {
+        this.security.suspiciousActivity = this.security.suspiciousActivity.slice(-50);
+    }
+
+    await this.save({ validateBeforeSave: false });
+};
+
+userSchema.methods.logLoginActivity = async function (loginData) {
+    this.security.lastLoginAt = loginData.lastLoginAt;
+    this.security.lastLoginIP = loginData.lastLoginIP;
+    this.security.lastLoginDevice = loginData.lastLoginDevice;
+
+    await this.save({ validateBeforeSave: false });
+}
+
+
+userSchema.methods.resetLoginAttempts = async function () {
+
+    this.security.loginAttempts.lockedUntil = undefined;
+    this.security.loginAttempts.count = 0;
+
+    await this.save({ validateBeforeSave: false });
+}
+
+
 module.exports = mongoose.model('User', userSchema);

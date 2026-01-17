@@ -137,14 +137,14 @@ const login = asyncWrapper(async (req, res, next) => {
     if (!user) {
         return res.status(400).json({
             status: httpStatusText.FAIL,
-            message: 'Invalid email or password'
+            message: 'Unknown user'
         });
     }
 
     // check if account locked
 
     if (user.isAccountLocked()) {
-        return next(appError.create(`Your account locked until ${user.security?.loginAttempts?.lockedUntil.toDateString()}`, 423, httpStatusText.FAIL))
+        return next(appError.create(`Your account locked until ${user.security?.loginAttempts?.lockedUntil.toLocaleString()}`, 423, httpStatusText.FAIL))
     }
 
 
@@ -157,6 +157,8 @@ const login = asyncWrapper(async (req, res, next) => {
     if (!isPasswordValid) {
 
         await user.incrementLoginAttempts();
+
+        await user.logSuspiciousActivity('failed_login', { ipAddress });
 
         return res.status(400).json({
             status: httpStatusText.FAIL,
@@ -179,7 +181,10 @@ const login = asyncWrapper(async (req, res, next) => {
         ipAddress
     })
 
-    user.lastLoginAt = Date.now();
+
+    await user.logLoginActivity({ lastLoginAt: Date.now(), lastLoginIP: ipAddress, lastLoginDevice: `${device} - ${browser}` });
+
+    await user.resetLoginAttempts();
 
     await user.save();
 
